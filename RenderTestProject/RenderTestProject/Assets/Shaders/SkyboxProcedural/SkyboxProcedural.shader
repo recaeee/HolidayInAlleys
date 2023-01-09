@@ -7,6 +7,9 @@ Shader "Render Test/Skybox Procedural"
         _HorizonOffset("Horiziont Offset",Range(-1,1)) = 0
         _HorizonIntensity("Horizon Intensity",Range(0,10)) = 7
         _HorizonBloom("Horizon Bloom",Range(1,10)) = 3
+        _HorizonAuroraIntensity("Horizon Aurora Intensity",Range(0,10)) = 1
+        _HorizonAuroraSmooth("Horizon Aurora Smooth",Range(0,1)) = 0.05
+        _HorizonAuroraBloom("Horizon Aurora Bloom",Range(0,10)) = 1
         //【白天】
         [Header(Day)]
         _DayBottomColor("Day Bottom Color",Color) = (1,1,1,1)
@@ -75,7 +78,7 @@ Shader "Render Test/Skybox Procedural"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            float _HorizonOffset, _HorizonIntensity, _HorizonBloom;
+            float _HorizonOffset, _HorizonIntensity, _HorizonBloom, _HorizonAuroraIntensity, _HorizonAuroraBloom, _HorizonAuroraSmooth;
             float4 _DayBottomColor, _DayTopColor, _DayHorizonColor, _DayCloudColor;
             float _DayCloudBloom, _DayTopIntensity;
             float4 _NightBottomColor, _NightTopColor, _NightHorizonColor, _NightCloudColor;
@@ -105,6 +108,31 @@ Shader "Render Test/Skybox Procedural"
                 float3 worldPos : TEXCOOORD1;
             };
 
+            float3 SkyAurora(float3 pos,float3 ro)
+            {
+                float3 col = float3(0,0,0);
+                float3 avgCol = float3(0,0,0);
+                float3 skyAuroraColor = float3(0,0,0);
+
+                for(int i=0;i<60;i++)
+                {
+                    float of = 0.06 * SAMPLE_TEXTURE2D(_CloudDistortTex,sampler_CloudDistortTex,pos.xy) * smoothstep(0,15,i);
+                    float pt = ((0.8+pow(i,1.4) * 0.002) -ro.y)/(pos.y*2.0+0.8);
+                    pt -= of;
+                    float3 bpos = ro +pt*pos;
+                    float2 p = bpos.zx;
+
+                    float noise = SAMPLE_TEXTURE2D(_CloudDistortTex,sampler_CloudDistortTex,p);
+                    float3 col2 = float3(0,0,0);
+                    col2.rgb = (sin(1.0-float3(2.15,-0.5,1.2)+ i + 1 * 0.1)*0.8+0.5)*noise;
+                    avgCol = lerp(avgCol,col2,0.5);
+                    col += avgCol *exp2(-i*0.065-2.5)*smoothstep(0,5,i);
+                }
+
+                col *=(clamp(pos.y * 15+4,0,1));
+                return col * 1.8;
+            }
+
             v2f vert(appdata v)
             {
                 v2f o;
@@ -120,6 +148,7 @@ Shader "Render Test/Skybox Procedural"
 
             float4 frag(v2f i) : SV_TARGET
             {
+                float3 finalColor = float3(0,0,0);
                 //获取方向光
                 Light mainLight = GetMainLight();
                 float dayTime = saturate(mainLight.direction.y);
@@ -143,12 +172,19 @@ Shader "Render Test/Skybox Procedural"
                 float finalNoise = saturate(cloudBaseNoise * cloudSecondaryNoise) * smoothstep(_CloudDissipate,_CloudDissipate + 0.005,i.uv.y);
 
                 float cloud = smoothstep(_CloudCutoff,_CloudCutoff+_CloudFuzziness,finalNoise);
+
                 float3 cloudColor = cloud * lerp(_NightCloudColor * _NightCloudBloom,_DayCloudColor * _DayCloudBloom, dayTime);
                 //【星】
                 float3 star = SAMPLE_TEXTURE2D(_StarNoiseTex,sampler_StarNoiseTex,(skyboxUV + _Time.x * _StarSpeed) * _StarIntensity);
                 float3 starColor = step(_StarCutoff, star) * _StarColor * _StarBloom * (1 - cloud) * (1 - dayTime) * saturate(i.worldPos.y);
+                //【地平线极光】
+                float3 horizonAuroraColor = (smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,-horizon)+smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,horizon) - 1) * (1,1,1,1) * _HorizonAuroraBloom;
+                //【天空极光】
+                float3 skyAuroraColor = SkyAurora(i.uv,float3(1,0,0)).x/15 * float3(0,1,0);
+                // skyAuroraColor = smoothstep(0.5,0.8,skyAuroraColor);
+                // return float4(skyAuroraColor,1);
                 //【最终颜色】
-                float3 finalColor = gradientSkyColor + horizonColor + cloudColor + starColor;
+                finalColor = gradientSkyColor + horizonColor + cloudColor + starColor + horizonAuroraColor + skyAuroraColor;
                 return float4(finalColor, 1);
             }
             ENDHLSL
