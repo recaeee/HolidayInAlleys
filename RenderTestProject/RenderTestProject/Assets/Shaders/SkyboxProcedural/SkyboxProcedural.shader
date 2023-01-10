@@ -178,7 +178,7 @@ Shader "Render Test/Skybox Procedural"
                 float3 star = SAMPLE_TEXTURE2D(_StarNoiseTex,sampler_StarNoiseTex,(skyboxUV + _Time.x * _StarSpeed) * _StarIntensity);
                 float3 starColor = step(_StarCutoff, star) * _StarColor * _StarBloom * (1 - cloud) * (1 - dayTime) * saturate(i.worldPos.y);
                 //【地平线极光】
-                float3 horizonAuroraColor = (smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,-horizon)+smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,horizon) - 1) * (1,1,1,1) * _HorizonAuroraBloom;
+                float3 horizonAuroraColor = (smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,-horizon)+smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,horizon) - 1) * (1,1,1,1) * _HorizonAuroraBloom * dayTime;
                 //【天空极光】
                 float3 skyAuroraColor = SkyAurora(i.uv,float3(1,0,0)).x/15 * float3(0,1,0);
                 // skyAuroraColor = smoothstep(0.5,0.8,skyAuroraColor);
