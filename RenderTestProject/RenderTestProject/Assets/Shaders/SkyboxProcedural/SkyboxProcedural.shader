@@ -108,29 +108,34 @@ Shader "Render Test/Skybox Procedural"
                 float3 worldPos : TEXCOOORD1;
             };
 
-            float3 SkyAurora(float3 pos,float3 ro)
+            //rayMarchingStepCount：采样次数
+            //rayMarchingDistance：光线前进总距离
+            float3 SkyAurora(float3 worldPos,float rayMarchingStepCount, float rayMarchingDistance)
             {
-                float3 col = float3(0,0,0);
-                float3 avgCol = float3(0,0,0);
                 float3 skyAuroraColor = float3(0,0,0);
 
-                for(int i=0;i<60;i++)
-                {
-                    float of = 0.06 * SAMPLE_TEXTURE2D(_CloudDistortTex,sampler_CloudDistortTex,pos.xy) * smoothstep(0,15,i);
-                    float pt = ((0.8+pow(i,1.4) * 0.002) -ro.y)/(pos.y*2.0+0.8);
-                    pt -= of;
-                    float3 bpos = ro +pt*pos;
-                    float2 p = bpos.zx;
+                float2 uv = worldPos.xz/worldPos.y;
+                float3 viewDir = normalize(worldPos - _WorldSpaceCameraPos);
 
-                    float noise = SAMPLE_TEXTURE2D(_CloudDistortTex,sampler_CloudDistortTex,p);
-                    float3 col2 = float3(0,0,0);
-                    col2.rgb = (sin(1.0-float3(2.15,-0.5,1.2)+ i + 1 * 0.1)*0.8+0.5)*noise;
-                    avgCol = lerp(avgCol,col2,0.5);
-                    col += avgCol *exp2(-i*0.065-2.5)*smoothstep(0,5,i);
+                //采样步长
+                float rayStepSize = rcp(rayMarchingStepCount);
+
+                for(float i=0;i<rayMarchingStepCount;i++)
+                {
+                    float curStep = pow(rayStepSize * i,2);
+
+                    float rayStepDistance = curStep * rayMarchingDistance;
+                    float2 sampleUV = uv + viewDir.xz * rayStepDistance;
+ 
+                    float3 photon = SAMPLE_TEXTURE2D(_CloudBaseNoiseTex,sampler_CloudBaseNoiseTex,sampleUV * 0.1);
+                    photon = step(0.55,photon) * photon * rcp(rayMarchingDistance);
+
+                    skyAuroraColor += photon;
                 }
 
-                col *=(clamp(pos.y * 15+4,0,1));
-                return col * 1.8;
+                skyAuroraColor = skyAuroraColor * step(0,worldPos.y);
+                
+                return skyAuroraColor;
             }
 
             v2f vert(appdata v)
@@ -180,9 +185,8 @@ Shader "Render Test/Skybox Procedural"
                 //【地平线极光】
                 float3 horizonAuroraColor = (smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,-horizon)+smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,horizon) - 1) * (1,1,1,1) * _HorizonAuroraBloom * dayTime;
                 //【天空极光】
-                float3 skyAuroraColor = SkyAurora(i.uv,float3(1,0,0)).x/15 * float3(0,1,0);
-                // skyAuroraColor = smoothstep(0.5,0.8,skyAuroraColor);
-                // return float4(skyAuroraColor,1);
+                float3 skyAuroraColor = SkyAurora(i.worldPos,70,5);
+                return float4(skyAuroraColor,1);
                 //【最终颜色】
                 finalColor = gradientSkyColor + horizonColor + cloudColor + starColor + horizonAuroraColor + skyAuroraColor;
                 return float4(finalColor, 1);
