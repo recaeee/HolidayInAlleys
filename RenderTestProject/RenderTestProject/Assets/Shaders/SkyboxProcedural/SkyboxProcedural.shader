@@ -186,9 +186,9 @@ Shader "Render Test/Skybox Procedural"
                 float3 horizonAuroraColor = (smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,-horizon)+smoothstep(-_HorizonAuroraIntensity,-_HorizonAuroraIntensity+_HorizonAuroraSmooth,horizon) - 1) * (1,1,1,1) * _HorizonAuroraBloom * dayTime;
                 //【天空极光】
                 float3 skyAuroraColor = SkyAurora(i.worldPos,70,5);
-                return float4(skyAuroraColor,1);
+                // return float4(skyAuroraColor,1);
                 //【最终颜色】
-                finalColor = gradientSkyColor + horizonColor + cloudColor + starColor + horizonAuroraColor + skyAuroraColor;
+                finalColor = gradientSkyColor + horizonColor + cloudColor + starColor + horizonAuroraColor;
                 return float4(finalColor, 1);
             }
             ENDHLSL
